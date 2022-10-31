@@ -4,7 +4,7 @@ import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as codeArtifact from 'aws-cdk-lib/aws-codeartifact';
 
-type PackageFormat = 'maven' | 'gradle' | 'npm';
+export type PackageFormat = 'maven' | 'gradle' | 'npm';
 
 interface DependencySenderStackProps extends cdk.StackProps{
   receiverAccount: string;
