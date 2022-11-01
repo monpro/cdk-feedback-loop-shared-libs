@@ -164,5 +164,40 @@ export class DependencyReceiverStack extends cdk.Stack {
 
     codeBuildReceiver.role?.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AWSCodeArtifactReadOnlyAccess'))
 
+    const branchPrefix = 'refs/heads/library_update_'
+    const onPullRequestCreatedRule = new events.Rule(this, 'onPullRequestCreatedRule', {
+      eventPattern: {
+        source: ['aws.codecommit'],
+        detailType: ['Code Commit Pull Request Triggering a build'],
+        resources: [codeCommitRepo.repositoryArn],
+        detail: {
+          event: ['PullRequestCreated'],
+          sourceReference: [{
+            prefix: branchPrefix
+          }],
+          destinationReference: ['refs/heads/main']
+        }
+      }
+    })
+
+    onPullRequestCreatedRule.addTarget(new targets.CodeBuildProject(codeBuildReceiver, {
+      event: events.RuleTargetInput.fromObject({
+        projectName: codeBuildReceiver.projectName,
+        sourceVersion: events.EventField.fromPath('$.detail.sourceReference')
+      })
+    }))
+
+    const onFailedBuildRule = new events.Rule(this, 'FailedBuildRule', {
+      eventPattern: {
+        detailType: ['Code Build Failed'],
+        source: ['aws.codebuild'],
+        detail: {
+          'build-status': ['Failed']
+        }
+      }
+    })
+
+    const senderAccountTarget = new targets.EventBus(events.EventBus.fromEventBusArn(this, 'crossAccountEventBus',`arn:aws:events:${this.region}:${senderAccount}:event-bus/default`))
+    onFailedBuildRule.addTarget(senderAccountTarget)
   }
 }
