@@ -1,21 +1,26 @@
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
-import { CdkFeedbackLoopSharedLibsStack } from '../lib/cdk-feedback-loop-shared-libs-stack';
+import {DependencyReceiverStack} from "../lib/dependency-receiver-stack";
+import {DependencySenderStack} from "../lib/dependency-sender-stack";
 
 const app = new cdk.App();
-new CdkFeedbackLoopSharedLibsStack(app, 'CdkFeedbackLoopSharedLibsStack', {
-  /* If you don't specify 'env', this stack will be environment-agnostic.
-   * Account/Region-dependent features and context lookups will not work,
-   * but a single synthesized template can be deployed anywhere. */
 
-  /* Uncomment the next line to specialize this stack for the AWS Account
-   * and Region that are implied by the current CLI configuration. */
-  // env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: process.env.CDK_DEFAULT_REGION },
+const receiverAccount = app.node.tryGetContext('receiverAccount')
+const senderAccount = app.node.tryGetContext('senderAccount')
 
-  /* Uncomment the next line if you know exactly what Account and Region you
-   * want to deploy the stack to. */
-  // env: { account: '123456789012', region: 'us-east-1' },
+const region = app.node.tryGetContext('region')
 
-  /* For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html */
-});
+if (!receiverAccount || !senderAccount || !region) {
+  throw new Error('Please provide "receiverAccount", "senderAccount", "region" through --context')
+}
+
+const receiverStack = new DependencyReceiverStack(app, 'ReceiverStack', {
+  env: {account: receiverAccount, region: region},
+  senderAccount: senderAccount
+})
+
+new DependencySenderStack(app, 'SenderStack', {
+  env: {account: senderAccount, region: region},
+  receiverAccount: receiverAccount
+}).addDependency(receiverStack)
