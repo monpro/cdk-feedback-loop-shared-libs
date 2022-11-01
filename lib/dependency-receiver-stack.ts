@@ -5,6 +5,8 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as codeCommit from 'aws-cdk-lib/aws-codecommit';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
+import * as codeBuild from 'aws-cdk-lib/aws-codebuild';
 import {PackageFormat} from "./dependency-sender-stack";
 import * as path from "path";
 
@@ -113,7 +115,54 @@ export class DependencyReceiverStack extends cdk.Stack {
       codeCommitRepo.grantPullPush(taskLambda.role)
     }
 
+    // add lambda as a target for the new release
+    newReleaseRule.addTarget(
+      new targets.LambdaFunction(taskLambda, {
+        event: events.RuleTargetInput.fromObject({
+          groupId: events.EventField.fromPath('$.detail.packageNamespace'),
+          artifactId: events.EventField.fromPath('$.detail.packageName'),
+          version: events.EventField.fromPath('$.detail.packageVersion'),
+          repoUrl: codeCommitRepo.repositoryCloneUrlHttp,
+          region: this.region
+        })
+      })
+    )
 
+    const codeArtifactDomain = 'codeartifact-domain'
+    const codeArtifactTokenCommand=`export CODEARTIFACT_TOKEN=$(aws codeartifact get-authorization-token --domain ${codeArtifactDomain} --domain-owner ${senderAccount} --query authorizationToken --output text)`
+
+
+    // build project which will build the receiver library
+    const codeBuildReceiver = new codeBuild.Project(this, 'codeBuildReceiverProject', {
+      environment: {
+        buildImage: codeBuild.LinuxBuildImage.AMAZON_LINUX_2_3,
+        environmentVariables: {
+          'CODE_ARTIFACT_DOMAIN': { value: codeArtifactDomain },
+          'CODE_ARTIFACT_ACCOUNT' : { value: senderAccount},
+          'CODE_ARTIFACT_REGION': { value: this.region }
+        }
+      },
+      source: codeBuild.Source.codeCommit({repository: codeCommitRepo}),
+      buildSpec: codeBuild.BuildSpec.fromObject(
+        {
+          version: '0.2',
+          phases: {
+            pre_build: {
+              commands: [
+                codeArtifactTokenCommand
+              ]
+            },
+            build: {
+              commands: [
+                'mvn package --settings ./settings.xml'
+              ]
+            }
+          }
+        }
+      )
+    })
+
+    codeBuildReceiver.role?.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AWSCodeArtifactReadOnlyAccess'))
 
   }
 }
