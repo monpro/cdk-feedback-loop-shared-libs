@@ -64,7 +64,7 @@ export class DependencyReceiverStack extends cdk.Stack {
     codeCommitRepo.grant(prCreationTask.taskRole, 'codecommit:CreatePullRequest')
 
     const container = prCreationTask.addContainer('PullRequestCreatorContainer', {
-      image: ecs.ContainerImage.fromAsset(path.join(__dirname, '..', '..', 'consumer')),
+      image: ecs.ContainerImage.fromAsset(path.join(__dirname, '..', 'consumer')),
       logging: new ecs.AwsLogDriver({
         streamPrefix: `PullRequestCreatorContainer`,
         logGroup: new logs.LogGroup(this, `PullRequestCreatorContainerLog`, {
@@ -78,7 +78,7 @@ export class DependencyReceiverStack extends cdk.Stack {
     const taskLambda = new lambda.Function(this, 'RunECSTaskLambda', {
       runtime: lambda.Runtime.NODEJS_16_X,
       handler: 'index.handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../../consumer/lambda-handler')),
+      code: lambda.Code.fromAsset(path.join(__dirname, '../consumer/lambda-handler')),
       environment: {
         TASK_DEFINITION_ARN: prCreationTask.taskDefinitionArn,
         CLUSTER_ARN: cluster.clusterArn,
